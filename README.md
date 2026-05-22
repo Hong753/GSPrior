@@ -71,10 +71,10 @@ Please modify the dataset paths, output paths, scene IDs, and GPU settings in th
 ## Citation
 If you find our code or paper useful, please consider citing
 ```bibtex
-@article{tang2026vidsplat,
-  title={VidSplat: Gaussian Splatting Reconstruction with Geometry-Guided Video Diffusion Priors},
-  author={Tang, Jimin and Zhang, Wenyuan and Zhou, Junsheng and Huang, Zian and Shi, Kanle and Xu, Shenkun and Liu, Yu-Shen and Han, Zhizhong},
-  journal={arXiv preprint arXiv:2605.11424},
+@article{noda20263d,
+  title={3D Gaussian Splatting with Self-Constrained Priors for High Fidelity Surface Reconstruction},
+  author={Noda, Takeshi and Liu, Yu-Shen and Han, Zhizhong},
+  journal={arXiv preprint arXiv:2603.19682},
   year={2026}
 }
 ```
