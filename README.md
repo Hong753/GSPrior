@@ -80,4 +80,4 @@ If you find our code or paper useful, please consider citing
 ```
 
 ## Acknowledgement
-This project is built upon [PGSR](https://github.com/zju3dv/PGSR) and [GS-Pull](https://github.com/wen-yuan-zhang/GS-Pull)  Thanks for these great projects.
+This project is built upon [PGSR](https://github.com/zju3dv/PGSR) and [GS-Pull](https://github.com/wen-yuan-zhang/GS-Pull). Thanks for these great projects.
