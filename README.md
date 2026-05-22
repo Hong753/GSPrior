@@ -36,7 +36,7 @@ git clone --recursive https://github.com/takeshie/GSPrior.git
 ```
 2. Setup Anaconda Environment
 ```
-conda create -n binocular3dgs python=3.8
+conda create -n gsprior python=3.8
 conda activate gsprior
 pip install -r requirements.txt
 pip install submodules/diff-gaussian-rasterization
