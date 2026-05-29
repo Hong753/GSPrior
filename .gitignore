@@ -1,0 +1,29 @@
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python packaging / build artifacts
+build/
+dist/
+*.egg-info/
+*.egg_info/
+egg_info/
+PKG-INFO
+
+# Native / CUDA extension build outputs
+*.so
+*.o
+*.out
+
+# IDE / editor
+.vscode/
+.spyproject/
+
+# Temporary files
+tmp/
+*.dump
+
+# Generated data / experiment artifacts
+*.ply
+*.npz

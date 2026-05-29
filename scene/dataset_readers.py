@@ -194,7 +194,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
             print(f"xyz {xyz.shape}")
         except:
             xyz, rgb, _ = read_points3D_text(txt_path)
-       storePly(ply_path, xyz, rgb)
+        storePly(ply_path, xyz, rgb)
     try:
         pcd = fetchPly(ply_path)
     except:

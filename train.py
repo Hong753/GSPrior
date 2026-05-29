@@ -147,13 +147,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         if iteration in tsdf_map: 
             tsdf_trunc = tsdf_map[iteration]
-            _,tsdf, vol_origin, voxel_size, mesh = run_tsdf_fusion(
-                model_path='./out/{}'.format(exp_name),
-                source_path='/data/yth/dataset/DTU-dataset/DTU/scan37',sdf_trunc = tsdf_trunc,
-                voxel_size=0.005)
-            np.save('./out/{}/tsdf_{}_{}.npy'.format(exp_name,exp_name,iteration),tsdf)
-            np.save('./out/{}/vol_origin_{}_{}.npy'.format(exp_name,exp_name,iteration),vol_origin)
-            mesh.export("./out/{}/gsprior_{}_{}.ply".format(exp_name,exp_name,iteration))
+            _, tsdf, vol_origin, voxel_size, mesh = run_tsdf_fusion(
+                model_path=scene.model_path,
+                source_path=scene.source_path,
+                sdf_trunc=tsdf_trunc,
+                iteration=-1,
+                voxel_size=0.005,
+            )
+            
+            np.save(os.path.join(scene.model_path, f"tsdf_{exp_name}_{iteration}.npy"), tsdf)
+            np.save(os.path.join(scene.model_path, f"vol_origin_{exp_name}_{iteration}.npy"), vol_origin)
+            mesh.export(os.path.join(scene.model_path, f"gsprior_{exp_name}_{iteration}.ply"))
             gaussians.set_tsdf(tsdf, vol_origin, voxel_size,tsdf_trunc, TrilinearInterpolation())
         gt_image, gt_image_gray = viewpoint_cam.get_image()
         if iteration > 1000 and opt.exposure_compensation:

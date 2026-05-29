@@ -32,15 +32,20 @@
 ## Installation
 1. Clone GSPrior
 ```
-git clone --recursive https://github.com/takeshie/GSPrior.git
+git clone --recursive https://github.com/Hong753/GSPrior.git
 ```
 2. Setup Anaconda Environment
 ```
-conda create -n gsprior python=3.8
+conda create -n gsprior python=3.12 -y
 conda activate gsprior
-pip install -r requirements.txt
-pip install submodules/diff-gaussian-rasterization
-pip install submodules/simple-knn
+
+# Optional
+conda install spyder -y
+
+pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+#pip install -r requirements.txt
+pip install --no-build-isolation git+https://github.com/camenduru/simple-knn
+pip install --no-build-isolation submodules/diff-plane-rasterization
 ```
 
 ## Dataset
