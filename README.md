@@ -43,7 +43,7 @@ conda activate gsprior
 conda install spyder -y
 
 pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
-#pip install -r requirements.txt
+pip install -r requirements.txt
 pip install --no-build-isolation git+https://github.com/camenduru/simple-knn
 pip install --no-build-isolation submodules/diff-plane-rasterization
 ```

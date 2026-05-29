@@ -27,146 +27,7 @@ import open3d as o3d
 from scene.app_model import AppModel
 import copy
 from collections import deque
-from utils import fusion
-import math
-import trimesh
-# ###
-# ##############################################
-def post_process_mesh_robust(
-    mesh: trimesh.Trimesh,
-    cluster_to_keep=1,
-    min_faces=50,
-    min_area=1e-4,
-    min_volume=1e-6,
-    max_center_distance=None,
-    remove_large_planes=True,
-    plane_normal_axis=2,       
-    plane_angle_thresh=15,     
-    plane_min_area_ratio=0.02, 
-    plane_min_patch_faces=50,  
-    verbose=True
-):
-    """
-    Robust mesh post-processing:
-    1) 移除小碎片 cluster
-    2) 保留最大主体 cluster
-    3) 移除大平面 patch（即使和主体连通）
-    """
 
-    if verbose:
-        print("========== Mesh Post-Processing ==========")
-        print(f"Raw mesh: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces")
-
-    # 拆分为连通子网格
-    components = mesh.split(only_watertight=False)
-    global_center = mesh.centroid
-
-    filtered = []
-    for m in components:
-        if len(m.faces) < min_faces:
-            continue
-        if m.area < min_area:
-            continue
-        if m.is_watertight and abs(m.volume) < min_volume:
-            continue
-        if max_center_distance is not None:
-            dist = np.linalg.norm(m.centroid - global_center)
-            if dist > max_center_distance:
-                continue
-        filtered.append(m)
-
-    if len(filtered) == 0:
-        if verbose:
-            print("Warning: all clusters filtered out, keeping original mesh.")
-        return mesh.copy()
-
-
-    filtered = sorted(filtered, key=lambda m: len(m.faces), reverse=True)
-    kept = filtered[:cluster_to_keep]
-
-    mesh_processed = kept[0] if len(kept) == 1 else trimesh.util.concatenate(kept)
-
-    mesh_processed.remove_duplicate_faces()
-    mesh_processed.remove_degenerate_faces()
-    mesh_processed.remove_unreferenced_vertices()
-
-    if verbose:
-        print(f"Processed mesh: {len(mesh_processed.vertices)} vertices, "
-              f"{len(mesh_processed.faces)} faces")
-
-    return mesh_processed
-
-def fov2focal(fov, pixels):
-    return pixels / (2 * math.tan(fov / 2))
-def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
-    Rt = np.zeros((4, 4))
-    Rt[:3, :3] = R.transpose()
-    Rt[:3, 3] = t
-    Rt[3, 3] = 1.0
-
-    C2W = np.linalg.inv(Rt)
-    cam_center = C2W[:3, 3]
-    cam_center = (cam_center + translate) * scale
-    C2W[:3, 3] = cam_center
-    Rt = np.linalg.inv(C2W)
-    return np.float32(Rt)
-def get_extrinsic(viewpoint_cam):
-    extrinsic = torch.tensor(getWorld2View2(viewpoint_cam.R, viewpoint_cam.T, translate=np.array([.0, .0, .0]), scale=1.0)).cuda()
-    return extrinsic
-
-
-def get_intrinsic(viewpoint_cam):
-    FovY=viewpoint_cam.FoVy
-    FovX=viewpoint_cam.FoVx
-    H=viewpoint_cam.image_height
-    W=viewpoint_cam.image_width
-    fx = W / (2 * math.tan(FovX / 2))
-    fy = H / (2 * math.tan(FovY / 2))
-    intrins = torch.tensor(
-        [[fx, 0., W/2.],
-        [0., fy, H/2.],
-        [0., 0., 1.0]]
-    ).float().cuda()
-    return intrins
-
-def _pixel2cam(depth, pixel_coords, intrinsic_mat_inv):
-    """Transform coordinates in the pixel frame to the camera frame."""
-    cam_coords = torch.matmul(intrinsic_mat_inv.float(), pixel_coords.float()) * depth.float()
-    return cam_coords
-def _meshgrid_abs(height, width):
-    """Meshgrid in the absolute coordinates."""
-    x_t = torch.matmul(
-        torch.ones([height, 1]),
-        torch.linspace(-1.0, 1.0, width).unsqueeze(1).permute(1, 0)
-    )  # [height, width]
-    y_t = torch.matmul(
-        torch.linspace(-1.0, 1.0, height).unsqueeze(1),
-        torch.ones([1, width])
-    )
-    x_t = (x_t + 1.0) * 0.5 * (width - 1)
-    y_t = (y_t + 1.0) * 0.5 * (height - 1)
-    x_t_flat = x_t.reshape(1, -1)
-    y_t_flat = y_t.reshape(1, -1)
-    ones = torch.ones_like(x_t_flat)
-    grid = torch.cat([x_t_flat, y_t_flat, ones], dim=0)  # [3, height * width]
-    return grid.cuda()
-# entrinsic w 2 c
-def depth_to_world_pts(depth, intrinsic, extrinsic):
-    batch_size, _, img_height, img_width = depth.shape
-    depth = depth.reshape(batch_size, 1, img_height * img_width)  # [batch_size, 1, height * width]
-    inv_intrinsic = torch.inverse(intrinsic)
-    grid = _meshgrid_abs(img_height, img_width)  # [3, height * width]
-    grid = grid.unsqueeze(0).repeat(batch_size, 1, 1)  # [batch_size, 3, height * width]
-    cam_coords = _pixel2cam(depth, grid, inv_intrinsic)  # [batch_size, 3, height * width]
-    ones = torch.ones([batch_size, 1, img_height * img_width]).cuda()  # [batch_size, 1, height * width]
-    cam_coords_hom = torch.cat([cam_coords, ones], dim=1)  # [batch_size, 4, height * width]
-    #print(cam_coords_hom.shape)
-    c2w = torch.inverse(extrinsic)
-    world_coor = torch.matmul(c2w, cam_coords_hom).transpose(1,2)
-    #print(world_coor.shape)
-    return world_coor[:, :, :3]
-##############################################
-###
 def clean_mesh(mesh, min_len=1000):
     with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
         triangle_clusters, cluster_n_triangles, cluster_area = (mesh.cluster_connected_triangles())
@@ -202,7 +63,7 @@ def post_process_mesh(mesh, cluster_to_keep=1):
     return mesh_0
 
 def render_set(model_path, name, iteration, views, scene, gaussians, pipeline, background, 
-               app_model=None, max_depth=5.0, volume=None, use_depth_filter=False,exp_name=None):
+               app_model=None, max_depth=5.0, volume=None, use_depth_filter=False):
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     render_depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders_depth")
@@ -214,11 +75,9 @@ def render_set(model_path, name, iteration, views, scene, gaussians, pipeline, b
     makedirs(render_normal_path, exist_ok=True)
 
     depths_tsdf_fusion = []
-    gaussians.set_tsdf_test(exp_name=exp_name,iteration=iteration)
-
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         gt, _ = view.get_image()
-        out = render(view, gaussians, pipeline, background, app_model=app_model,iteration=10000000)
+        out = render(view, gaussians, pipeline, background, app_model=app_model)
         rendering = out["render"].clamp(0.0, 1.0)
         _, H, W = rendering.shape
 
@@ -241,7 +100,6 @@ def render_set(model_path, name, iteration, views, scene, gaussians, pipeline, b
             rendering_np = (rendering.permute(1,2,0).clamp(0,1)[:,:,[2,1,0]]*255).detach().cpu().numpy().astype(np.uint8)
             cv2.imwrite(os.path.join(render_path, view.image_name + ".jpg"), rendering_np)
         cv2.imwrite(os.path.join(render_depth_path, view.image_name + ".jpg"), depth_color)
-        cv2.imwrite(os.path.join(render_depth_path, view.image_name + "_ori.jpg"), depth_i)
         cv2.imwrite(os.path.join(render_normal_path, view.image_name + ".jpg"), normal)
 
         if use_depth_filter:
@@ -253,6 +111,7 @@ def render_set(model_path, name, iteration, views, scene, gaussians, pipeline, b
             mask = angle > (80.0 / 180 * 3.14159)
             depth_tsdf[mask] = 0
         depths_tsdf_fusion.append(depth_tsdf.squeeze().cpu())
+        
     if volume is not None:
         depths_tsdf_fusion = torch.stack(depths_tsdf_fusion, dim=0)
         for idx, view in enumerate(tqdm(views, desc="TSDF Fusion progress")):
@@ -276,7 +135,7 @@ def render_set(model_path, name, iteration, views, scene, gaussians, pipeline, b
                 pose)
 
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool,
-                 max_depth : float, voxel_size : float, num_cluster: int, use_depth_filter : bool,exp_name : str):
+                 max_depth : float, voxel_size : float, num_cluster: int, use_depth_filter : bool):
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
@@ -287,14 +146,14 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
-        volume = o3d.integration.ScalableTSDFVolume(
+        volume = o3d.pipelines.integration.ScalableTSDFVolume(
             voxel_length=voxel_size,
             sdf_trunc=4.0*voxel_size,
-            color_type=o3d.integration.TSDFVolumeColorType.RGB8)
+            color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8)
 
         if not skip_train:
             render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), scene, gaussians, pipeline, background, 
-                       max_depth=max_depth, volume=volume, use_depth_filter=use_depth_filter,exp_name=exp_name)
+                       max_depth=max_depth, volume=volume, use_depth_filter=use_depth_filter)
             print(f"extract_triangle_mesh")
             mesh = volume.extract_triangle_mesh()
 
@@ -309,7 +168,7 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
                                        write_triangle_uvs=True, write_vertex_colors=True, write_vertex_normals=True)
 
         if not skip_test:
-            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), scene, gaussians, pipeline, background,exp_name=exp_name)
+            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), scene, gaussians, pipeline, background)
 
 if __name__ == "__main__":
     torch.set_num_threads(8)
@@ -317,7 +176,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Testing script parameters")
     model = ModelParams(parser, sentinel=True)
     pipeline = PipelineParams(parser)
-    parser.add_argument("--iteration", default=10000, type=int)
+    parser.add_argument("--iteration", default=-1, type=int)
     parser.add_argument("--skip_train", action="store_true")
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
@@ -328,9 +187,8 @@ if __name__ == "__main__":
 
     args = get_combined_args(parser)
     print("Rendering " + args.model_path)
-    exp_name = args.model_path.split('/')[-1]
+
     # Initialize system state (RNG)
     safe_state(args.quiet)
     print(f"multi_view_num {model.multi_view_num}")
-    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test,
-                 args.max_depth, args.voxel_size, args.num_cluster, args.use_depth_filter,exp_name)
+    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test, args.max_depth, args.voxel_size, args.num_cluster, args.use_depth_filter)
